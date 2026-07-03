@@ -443,8 +443,8 @@ const MODULES = [
     desc:'Banco de produtos EQI, flashcards, quiz e comparador.' },
   { id:'scripts', label:'Scripts de Ligação', icon:'📞', status:'active', group:'Módulos',
     desc:'Gere mensagens de primeiro contato, siga o roteiro SPIN e use templates prontos por canal.' },
-  { id:'objecoes', label:'Quebra de Objeções', icon:'🛡️', status:'soon', group:'Módulos',
-    desc:'Banco de respostas para as objeções mais comuns dos clientes.' },
+  { id:'objecoes', label:'Quebra de Objeções', icon:'🛡️', status:'active', group:'Módulos',
+    desc:'Banco de objeções com explicação e variação por perfil, modo treino e suas próprias anotações.' },
   { id:'simulador', label:'Simulador de Propostas', icon:'🧮', status:'active', group:'Módulos',
     desc:'Simule conversas com prospects por perfil e consulte respostas para objeções comuns.' },
   { id:'metas', label:'Metas & Performance', icon:'📈', status:'soon', group:'Módulos',
@@ -474,6 +474,7 @@ function defaultState(){
     simulacaoMelhorMedia: 0,
     mensagensGeradas: 0,
     templatesUsados: [],
+    minhasObjecoes: [],
   };
 }
 
@@ -637,6 +638,7 @@ const VIEW_RENDERERS = {
   produtos: renderProdutosModule,
   simulador: renderSimuladorModule,
   scripts: renderScriptsModule,
+  objecoes: renderObjecoesModule,
 };
 
 function renderSidebarNav(){
@@ -738,6 +740,10 @@ function renderStatGridInner(){
     <div class="stat-card">
       <div class="stat-value">${APP_STATE.templatesUsados.length}/${totalTemplates}</div>
       <div class="stat-label">Templates usados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${APP_STATE.minhasObjecoes.length}</div>
+      <div class="stat-label">Objeções documentadas por você</div>
     </div>
   `;
 }
@@ -1423,29 +1429,101 @@ const PROSPECT_PERGUNTAS = {
 
 const OBJECOES = [
   { id:'obj-gerente', categoria:'Status quo', objecao:'Já tenho gerente no banco, não preciso de mais ninguém.',
-    resposta:'Ótimo que você já tem alguém acompanhando! A ideia não é substituir, é complementar: no banco, o gerente costuma oferecer só os produtos daquela instituição. Na EQI você tem acesso a múltiplas instituições e produtos, com assessoria sem o conflito de interesse de "vender o produto do próprio banco".' },
+    resposta:'Ótimo que você já tem alguém acompanhando! A ideia não é substituir, é complementar: no banco, o gerente costuma oferecer só os produtos daquela instituição. Na EQI você tem acesso a múltiplas instituições e produtos, com assessoria sem o conflito de interesse de "vender o produto do próprio banco".',
+    porque:'Valida o vínculo existente em vez de atacá-lo, e reposiciona a EQI como complemento — não substituição — reduzindo a resistência natural à mudança.',
+    variacoes:{
+      conservador:'Ótimo que você já tem alguém de confiança acompanhando! A diferença é que aqui você tem acesso a produtos com garantia do FGC de várias instituições, não só uma — o que na prática aumenta sua segurança, não diminui.',
+      moderado:'Faz sentido manter o gerente. A ideia aqui é você comparar: às vezes só de ver lado a lado já vale a pena, sem trocar nada agora.',
+      arrojado:'Perfeito, mantenha o gerente pro dia a dia. Aqui a ideia é te dar acesso a produtos mais sofisticados que o banco geralmente não oferece pro seu perfil.',
+    } },
   { id:'obj-confianca', categoria:'Confiança', objecao:'Não confio em corretora.',
-    resposta:'Entendo a preocupação. Corretoras são fiscalizadas pela CVM e pelo Banco Central, assim como os bancos. Seu dinheiro fica custodiado em seu nome na B3 (a bolsa), não na corretora — ou seja, mesmo que a corretora tivesse problemas, os ativos continuam seus.' },
+    resposta:'Entendo a preocupação. Corretoras são fiscalizadas pela CVM e pelo Banco Central, assim como os bancos. Seu dinheiro fica custodiado em seu nome na B3 (a bolsa), não na corretora — ou seja, mesmo que a corretora tivesse problemas, os ativos continuam seus.',
+    porque:'Usa fatos verificáveis (regulação CVM/Bacen, custódia na B3) para substituir a desconfiança por informação concreta, sem soar defensivo.',
+    variacoes:{
+      conservador:'Entendo — segurança é o mais importante pra você. Seu dinheiro fica custodiado na B3 no seu nome, o mesmo sistema usado por todos os bancos grandes.',
+      moderado:'Faz sentido questionar. Posso te mostrar como funciona a custódia na B3, pra você comparar com o que já conhece do banco.',
+      arrojado:'Justo desconfiar. Vale lembrar que as maiores gestoras e fundos do país operam via corretoras — é o mesmo sistema, só com mais opções de produto.',
+    } },
   { id:'obj-golpe', categoria:'Confiança', objecao:'Isso é golpe?',
-    resposta:'Ótimo que você desconfie, é sinal de cuidado! A EQI é regulamentada pela CVM (Comissão de Valores Mobiliários), registro público que dá pra conferir no site da CVM. Todo o patrimônio fica custodiado na B3, no seu CPF, não na empresa.' },
+    resposta:'Ótimo que você desconfie, é sinal de cuidado! A EQI é regulamentada pela CVM (Comissão de Valores Mobiliários), registro público que dá pra conferir no site da CVM. Todo o patrimônio fica custodiado na B3, no seu CPF, não na empresa.',
+    porque:'Elogia a cautela do prospect (gera empatia) antes de apresentar a prova de regulamentação, o que reduz a defensividade dele.',
+    variacoes:{
+      conservador:'Que bom que você desconfia, é exatamente o tipo de cuidado que recomendo. Pode conferir o registro da EQI direto no site da CVM antes de qualquer decisão.',
+      moderado:'Faz sentido checar. Te mando o link do registro na CVM agora mesmo, assim você confirma por conta própria.',
+      arrojado:'Ótimo você validar isso. A CVM regula o mercado todo, inclusive as gestoras que você já deve conhecer — é o mesmo ecossistema.',
+    } },
   { id:'obj-sem-dinheiro', categoria:'Recursos', objecao:'Não tenho dinheiro agora.',
-    resposta:'Sem problema! Vários produtos aceitam aportes a partir de valores baixos — dá pra começar pequeno e ir aumentando com o tempo. Posso te mostrar opções que cabem no seu momento atual, sem compromisso de valor alto agora.' },
+    resposta:'Sem problema! Vários produtos aceitam aportes a partir de valores baixos — dá pra começar pequeno e ir aumentando com o tempo. Posso te mostrar opções que cabem no seu momento atual, sem compromisso de valor alto agora.',
+    porque:'Remove a barreira de valor mínimo alto, mostrando que dá pra começar pequeno — isso reduz o risco percebido de compromisso.',
+    variacoes:{
+      conservador:'Sem problema, dá pra começar com um valor pequeno só pra você sentir segurança antes de aportar mais.',
+      moderado:'Sem problema, dá pra começar pequeno e ir comparando com o que você já tem.',
+      arrojado:'Sem problema, dá pra começar com pouco e escalar conforme você for validando os resultados.',
+    } },
   { id:'obj-pensar', categoria:'Adiamento', objecao:'Preciso pensar.',
-    resposta:'Faz todo sentido, é uma decisão sua. Só pra te ajudar melhor: ficou alguma dúvida específica em aberto, ou algum receio que eu possa esclarecer agora? Às vezes uma informação a mais já resolve.' },
+    resposta:'Faz todo sentido, é uma decisão sua. Só pra te ajudar melhor: ficou alguma dúvida específica em aberto, ou algum receio que eu possa esclarecer agora? Às vezes uma informação a mais já resolve.',
+    porque:'Não empurra a decisão; investiga se existe uma dúvida específica escondida atrás do "preciso pensar", que é frequentemente uma objeção não verbalizada.',
+    variacoes:{
+      conservador:'Sem pressa nenhuma. Ficou alguma dúvida sobre a segurança ou garantia que eu possa esclarecer agora?',
+      moderado:'Claro, é uma decisão sua. Ficou alguma dúvida na comparação que eu possa ajudar a resolver?',
+      arrojado:'Tranquilo. Ficou alguma dúvida sobre o potencial de retorno ou o risco que eu possa detalhar melhor?',
+    } },
   { id:'obj-rendendo-bem', categoria:'Status quo', objecao:'Meu dinheiro já está rendendo bem onde está.',
-    resposta:'Que bom que está rendendo! Posso te mostrar uma comparação rápida entre o que você tem hoje e as opções daqui, só pra você decidir com mais informação na mão — sem compromisso nenhum.' },
+    resposta:'Que bom que está rendendo! Posso te mostrar uma comparação rápida entre o que você tem hoje e as opções daqui, só pra você decidir com mais informação na mão — sem compromisso nenhum.',
+    porque:'Não desafia a percepção do prospect; oferece uma comparação objetiva para ele mesmo concluir se vale a pena mudar.',
+    variacoes:{
+      conservador:'Que bom! Posso te mostrar uma opção igualmente segura, só pra comparar se realmente compensa mudar.',
+      moderado:'Ótimo. Vale a pena comparar números lado a lado — às vezes a diferença surpreende.',
+      arrojado:'Legal. Mas será que não existe algo rendendo ainda mais pro seu perfil? Vale a pena comparar.',
+    } },
   { id:'obj-medo-risco', categoria:'Aversão a risco', objecao:'Investimento é arriscado, prefiro não mexer no que já tenho.',
-    resposta:'Entendo a preocupação com risco. Nem todo investimento é arriscado — existem opções com garantia do FGC, tão seguras quanto a poupança, mas com rentabilidade melhor. Posso te mostrar essas alternativas mais conservadoras primeiro.' },
+    resposta:'Entendo a preocupação com risco. Nem todo investimento é arriscado — existem opções com garantia do FGC, tão seguras quanto a poupança, mas com rentabilidade melhor. Posso te mostrar essas alternativas mais conservadoras primeiro.',
+    porque:'Desfaz a generalização "investimento = risco" trazendo uma opção segura como ponte, sem forçar o prospect para produtos mais arrojados.',
+    variacoes:{
+      conservador:'Faz sentido esse cuidado. Existem opções com garantia do FGC, tão seguras quanto a poupança — posso te mostrar essas primeiro.',
+      moderado:'Entendo. Dá pra montar uma carteira com a maior parte em opções seguras e só uma parte pequena buscando mais retorno.',
+      arrojado:'Entendo o cuidado, mas hoje ficar só no seguro também tem custo — o de deixar retorno na mesa. Posso te mostrar o equilíbrio ideal.',
+    } },
   { id:'obj-taxa', categoria:'Preço', objecao:'Vocês cobram taxa? Não quero pagar mais por isso.',
-    resposta:'Boa pergunta. Na EQI a assessoria de investimentos não tem custo direto para o cliente na maioria dos produtos — a remuneração acontece de forma transparente, e posso te mostrar exatamente como funciona antes de você decidir qualquer coisa.' },
+    resposta:'Boa pergunta. Na EQI a assessoria de investimentos não tem custo direto para o cliente na maioria dos produtos — a remuneração acontece de forma transparente, e posso te mostrar exatamente como funciona antes de você decidir qualquer coisa.',
+    porque:'Antecipa a objeção de custo com transparência total, o que constrói confiança antes mesmo de ser questionado a fundo.',
+    variacoes:{
+      conservador:'Boa pergunta. Posso te mostrar exatamente como funciona antes de qualquer decisão, sem letra miúda.',
+      moderado:'Justo perguntar. Te mostro a comparação de custo com o que você já tem hoje.',
+      arrojado:'Faz sentido questionar custo x retorno. Te mostro os números pra você decidir com clareza.',
+    } },
   { id:'obj-ja-perdi', categoria:'Experiência negativa', objecao:'Já perdi dinheiro investindo antes, não quero mais.',
-    resposta:'Sinto muito que isso tenha acontecido. Pode me contar um pouco o que rolou? Muitas vezes o problema não foi investir, foi o produto errado pro perfil da pessoa. Podemos montar algo bem mais alinhado ao que você busca hoje.' },
+    resposta:'Sinto muito que isso tenha acontecido. Pode me contar um pouco o que rolou? Muitas vezes o problema não foi investir, foi o produto errado pro perfil da pessoa. Podemos montar algo bem mais alinhado ao que você busca hoje.',
+    porque:'Acolhe a experiência negativa antes de qualquer argumento de venda — pular essa etapa geralmente faz o prospect se fechar de vez.',
+    variacoes:{
+      conservador:'Sinto muito. Isso reforça ainda mais a importância de começar por opções com garantia — posso te mostrar essas.',
+      moderado:'Entendo a frustração. Vamos entender o que rolou pra montar algo mais alinhado ao seu perfil real.',
+      arrojado:'Entendo. Perda mal calculada é diferente de risco calculado — posso te mostrar a diferença.',
+    } },
   { id:'obj-nao-entendo', categoria:'Falta de conhecimento', objecao:'Não entendo nada de investimento.',
-    resposta:'Sem problema, é exatamente pra isso que estou aqui. Vou explicar em uma linguagem simples, sem "economês", e você só avança no que fizer sentido pra você.' },
+    resposta:'Sem problema, é exatamente pra isso que estou aqui. Vou explicar em uma linguagem simples, sem "economês", e você só avança no que fizer sentido pra você.',
+    porque:'Remove a barreira de conhecimento técnico assumindo a responsabilidade de explicar, o que reduz a insegurança do prospect.',
+    variacoes:{
+      conservador:'Sem problema, vou explicar em passos simples, sem pressa, focando primeiro na parte de segurança.',
+      moderado:'Sem problema, vou te explicar comparando com o que você já conhece, fica mais fácil.',
+      arrojado:'Sem problema, posso ir direto aos pontos técnicos que mais importam pro seu perfil, sem enrolação.',
+    } },
   { id:'obj-vou-pesquisar', categoria:'Adiamento', objecao:'Vou pesquisar mais e te procuro depois.',
-    resposta:'Combinado! Posso te mandar um material rápido pra você olhar com calma? E se surgir alguma dúvida nesse meio tempo, é só me chamar — não precisa esperar "ter certeza" de tudo pra conversarmos de novo.' },
+    resposta:'Combinado! Posso te mandar um material rápido pra você olhar com calma? E se surgir alguma dúvida nesse meio tempo, é só me chamar — não precisa esperar "ter certeza" de tudo pra conversarmos de novo.',
+    porque:'Não tenta impedir a pesquisa (o que geraria resistência); em vez disso, se oferece como recurso disponível durante esse processo.',
+    variacoes:{
+      conservador:'Combinado. Te mando um material com foco em segurança e garantias pra você pesquisar com calma.',
+      moderado:'Combinado. Te mando uma comparação pra facilitar sua pesquisa.',
+      arrojado:'Combinado. Te mando dados e histórico de rentabilidade pra sua pesquisa ser mais completa.',
+    } },
   { id:'obj-conjuge', categoria:'Decisão compartilhada', objecao:'Meu marido/esposa cuida disso, preciso falar com ele(a) antes.',
-    resposta:'Super comum, e faz sentido decidirem juntos. Que tal eu te mandar um resumo simples pra vocês conversarem, ou, se preferir, posso explicar pros dois numa call rápida?' },
+    resposta:'Super comum, e faz sentido decidirem juntos. Que tal eu te mandar um resumo simples pra vocês conversarem, ou, se preferir, posso explicar pros dois numa call rápida?',
+    porque:'Reconhece a decisão compartilhada como legítima em vez de tentar contorná-la, e oferece um formato prático pra facilitar o alinhamento do casal.',
+    variacoes:{
+      conservador:'Faz todo sentido decidirem juntos algo tão importante. Posso mandar um resumo simples focado em segurança pra vocês conversarem.',
+      moderado:'Faz sentido. Te mando uma comparação pra vocês avaliarem juntos.',
+      arrojado:'Faz sentido alinhar. Te mando os números de rentabilidade pra vocês decidirem com dados.',
+    } },
 ];
 
 const OBJECOES_CATEGORIAS = ['Todas', ...Array.from(new Set(OBJECOES.map(o => o.categoria)))];
@@ -2131,6 +2209,310 @@ function renderTplGrid(){
         saveState();
         addXP(3, 'usou um template pronto');
       }
+    });
+  });
+}
+
+/* ==========================================================================
+   MÓDULO: QUEBRA DE OBJEÇÕES — RENDER
+   Reaproveita o array OBJECOES e o contador APP_STATE.objecoesConsultadas
+   já usados no módulo Simulador de Propostas.
+   ========================================================================== */
+let objecoesModView = 'banco';
+let objecoesBancoFiltro = { busca:'', categoria:'Todas' };
+let treinoState = { deck:[], index:0, revelado:false };
+let minhasObjecoesForm = { objecao:'', resposta:'' };
+
+function renderObjecoesModule(container){
+  container.innerHTML = `
+    <div class="module-header">
+      <h1>🛡️ Quebra de Objeções</h1>
+      <p>Domine as objeções mais comuns, treine sua resposta e documente as que você mesmo ouve na prática.</p>
+    </div>
+    <div class="disclaimer">Conteúdo simplificado para estudo — use como ponto de partida e adapte ao seu estilo e ao momento de cada conversa.</div>
+    <div class="subtabs" id="objecoesModSubtabs">
+      <button class="subtab-btn" data-sub="banco">Banco de Objeções</button>
+      <button class="subtab-btn" data-sub="treino">Modo Treino</button>
+      <button class="subtab-btn" data-sub="minhas">Minhas Objeções</button>
+    </div>
+    <div id="objecoesModSubcontent"></div>
+  `;
+  document.querySelectorAll('#objecoesModSubtabs [data-sub]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      objecoesModView = btn.dataset.sub;
+      renderObjecoesModSubView();
+    });
+  });
+  renderObjecoesModSubView();
+}
+
+function renderObjecoesModSubView(){
+  document.querySelectorAll('#objecoesModSubtabs [data-sub]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sub === objecoesModView);
+  });
+  const el = document.getElementById('objecoesModSubcontent');
+  if(objecoesModView === 'banco') renderBancoObjecoes(el);
+  else if(objecoesModView === 'treino') renderTreinoObjecoes(el);
+  else if(objecoesModView === 'minhas') renderMinhasObjecoes(el);
+}
+
+/* ---------- BANCO DE OBJEÇÕES (enriquecido) ---------- */
+function renderBancoObjecoes(container){
+  container.innerHTML = `
+    <div class="toolbar">
+      <input type="text" class="search-input" id="objBancoBusca" placeholder="Buscar objeção (ex: golpe, gerente, preço...)" value="${objecoesBancoFiltro.busca}" />
+    </div>
+    <div class="toolbar" id="objBancoFiltros"></div>
+    <div class="card-grid" id="objBancoGrid"></div>
+  `;
+  document.getElementById('objBancoFiltros').innerHTML = OBJECOES_CATEGORIAS.map(cat => `
+    <button class="filter-chip ${objecoesBancoFiltro.categoria === cat ? 'active' : ''}" data-cat="${cat}">${cat}</button>
+  `).join('');
+  document.getElementById('objBancoFiltros').querySelectorAll('[data-cat]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      objecoesBancoFiltro.categoria = btn.dataset.cat;
+      renderBancoObjecoes(container);
+    });
+  });
+  document.getElementById('objBancoBusca').addEventListener('input', (e) => {
+    objecoesBancoFiltro.busca = e.target.value;
+    renderObjBancoGrid();
+  });
+  renderObjBancoGrid();
+}
+
+function marcarObjecaoConsultada(id, xpMotivo, xpValor){
+  if(!APP_STATE.objecoesConsultadas.includes(id)){
+    APP_STATE.objecoesConsultadas.push(id);
+    saveState();
+    addXP(xpValor || 2, xpMotivo || 'consultou uma objeção');
+    return true;
+  }
+  return false;
+}
+
+function renderObjBancoGrid(){
+  const grid = document.getElementById('objBancoGrid');
+  const termo = objecoesBancoFiltro.busca.trim().toLowerCase();
+  const filtradas = OBJECOES.filter(o => {
+    const matchCat = objecoesBancoFiltro.categoria === 'Todas' || o.categoria === objecoesBancoFiltro.categoria;
+    const matchBusca = !termo || o.objecao.toLowerCase().includes(termo) || o.categoria.toLowerCase().includes(termo) || o.resposta.toLowerCase().includes(termo);
+    return matchCat && matchBusca;
+  });
+
+  if(filtradas.length === 0){
+    grid.innerHTML = `<div class="empty-state">Nenhuma objeção encontrada para essa busca.</div>`;
+    return;
+  }
+
+  grid.innerHTML = filtradas.map(o => `
+    <div class="product-card" data-id="${o.id}">
+      <div class="pc-top">
+        <h3>"${o.objecao}"</h3>
+        <span class="tag tag-categoria">${o.categoria}</span>
+      </div>
+      <div class="pc-details">
+        <div class="pc-row">
+          <div class="pc-row-label">Resposta sugerida</div>
+          <div class="pc-row-value" id="objResposta-${o.id}">${o.resposta}</div>
+        </div>
+        <div class="pc-row">
+          <div class="pc-row-label">Por que funciona</div>
+          <div class="pc-row-value">${o.porque}</div>
+        </div>
+        <div class="pc-row">
+          <div class="pc-row-label">Adaptar para o perfil do lead</div>
+          <div class="toolbar" style="margin-bottom:0;" data-obj-id="${o.id}">
+            ${PROSPECT_PERFIS.map(p => `<button class="filter-chip" data-perfil-btn="${p.id}">${p.icon} ${p.label}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="pc-toggle-hint">Clique para ver a resposta completa</div>
+    </div>
+  `).join('');
+
+  grid.querySelectorAll('.product-card').forEach(card => {
+    card.addEventListener('click', () => {
+      card.classList.toggle('expanded');
+      if(card.classList.contains('expanded')){
+        marcarObjecaoConsultada(card.dataset.id, 'consultou uma objeção');
+      }
+    });
+  });
+
+  grid.querySelectorAll('[data-perfil-btn]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wrap = btn.closest('[data-obj-id]');
+      const objId = wrap.dataset.objId;
+      const obj = OBJECOES.find(o => o.id === objId);
+      const respostaEl = document.getElementById('objResposta-' + objId);
+      const jaAtivo = btn.classList.contains('active');
+      wrap.querySelectorAll('[data-perfil-btn]').forEach(b => b.classList.remove('active'));
+      if(jaAtivo){
+        respostaEl.textContent = obj.resposta;
+      } else {
+        btn.classList.add('active');
+        const perfilId = btn.dataset.perfilBtn;
+        respostaEl.textContent = (obj.variacoes && obj.variacoes[perfilId]) ? obj.variacoes[perfilId] : obj.resposta;
+      }
+    });
+  });
+}
+
+/* ---------- MODO TREINO ---------- */
+function iniciarTreinoObjecoes(){
+  treinoState = { deck: embaralhar(OBJECOES), index: 0, revelado: false };
+}
+
+function renderTreinoObjecoes(container){
+  if(treinoState.deck.length === 0) iniciarTreinoObjecoes();
+  container.innerHTML = `
+    <div class="flashcard-panel">
+      <div class="flashcard-progress" id="treinoProgress"></div>
+      <div class="flashcard-scene">
+        <div class="flashcard" id="treinoCard">
+          <div class="flashcard-inner" id="treinoInner">
+            <div class="flashcard-face flashcard-front">
+              <span class="tag tag-categoria fc-tag" id="treinoTagFront"></span>
+              <div class="fc-text" id="treinoFront"></div>
+            </div>
+            <div class="flashcard-face flashcard-back">
+              <span class="tag tag-baixo fc-tag">Resposta sugerida</span>
+              <div class="fc-text" id="treinoBack"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flashcard-hint" id="treinoHint">Pense na sua resposta e clique no card para revelar</div>
+      <div class="flashcard-controls" id="treinoControls"></div>
+    </div>
+  `;
+  document.getElementById('treinoInner').addEventListener('click', revelarTreino);
+  document.getElementById('treinoInner').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' || e.key === ' ') revelarTreino();
+  });
+  renderTreinoConteudo();
+}
+
+function renderTreinoConteudo(){
+  const card = treinoState.deck[treinoState.index];
+  document.getElementById('treinoProgress').textContent = `Objeção ${treinoState.index + 1} de ${treinoState.deck.length}`;
+  document.getElementById('treinoTagFront').textContent = card.categoria;
+  document.getElementById('treinoFront').textContent = `"${card.objecao}"`;
+  document.getElementById('treinoBack').textContent = card.resposta;
+  document.getElementById('treinoCard').classList.remove('flipped');
+  treinoState.revelado = false;
+  document.getElementById('treinoHint').textContent = 'Pense na sua resposta e clique no card para revelar';
+  document.getElementById('treinoControls').innerHTML = '';
+}
+
+function revelarTreino(){
+  if(treinoState.revelado) return;
+  treinoState.revelado = true;
+  document.getElementById('treinoCard').classList.add('flipped');
+  document.getElementById('treinoHint').textContent = 'Você acertou o raciocínio?';
+  document.getElementById('treinoControls').innerHTML = `
+    <button class="btn btn-secondary" id="treinoErrei">❌ Não acertei</button>
+    <button class="btn btn-primary" id="treinoAcertei">✅ Acertei</button>
+  `;
+  document.getElementById('treinoErrei').addEventListener('click', () => avaliarTreino(false));
+  document.getElementById('treinoAcertei').addEventListener('click', () => avaliarTreino(true));
+}
+
+function avaliarTreino(acertou){
+  const card = treinoState.deck[treinoState.index];
+  marcarObjecaoConsultada(card.id, acertou ? 'acertou o raciocínio no treino de objeção' : 'revisou uma objeção no treino', acertou ? 5 : 2);
+  document.getElementById('treinoHint').textContent = acertou ? 'Mandou bem! 🎉' : 'Tudo bem, o importante é praticar.';
+  document.getElementById('treinoControls').innerHTML = `<button class="btn btn-primary" id="treinoProximo">Próxima objeção →</button>`;
+  document.getElementById('treinoProximo').addEventListener('click', () => {
+    treinoState.index = (treinoState.index + 1) % treinoState.deck.length;
+    renderTreinoConteudo();
+  });
+}
+
+/* ---------- MINHAS OBJEÇÕES ---------- */
+function renderMinhasObjecoes(container){
+  container.innerHTML = `
+    <div class="form-grid" style="grid-template-columns:1fr;">
+      <div class="form-field">
+        <label for="moObjecao">Objeção que você ouviu na prática</label>
+        <input type="text" id="moObjecao" placeholder="ex: Minha esposa não vai gostar dessa ideia" value="${minhasObjecoesForm.objecao}" />
+      </div>
+      <div class="form-field">
+        <label for="moResposta">Resposta que você usou (ou usaria)</label>
+        <input type="text" id="moResposta" placeholder="ex: Como você acha que ela reagiria se eu te mandasse um resumo pra conversarem juntos?" value="${minhasObjecoesForm.resposta}" />
+      </div>
+    </div>
+    <div class="flashcard-controls" style="justify-content:flex-start;margin-bottom:24px;">
+      <button class="btn btn-primary" id="salvarObjecaoBtn">💾 Salvar na minha lista</button>
+    </div>
+    <div class="section-title" style="margin-top:0;">Suas objeções documentadas</div>
+    <div class="card-grid" id="minhasObjGrid"></div>
+  `;
+  document.getElementById('moObjecao').addEventListener('input', (e) => { minhasObjecoesForm.objecao = e.target.value; });
+  document.getElementById('moResposta').addEventListener('input', (e) => { minhasObjecoesForm.resposta = e.target.value; });
+  document.getElementById('salvarObjecaoBtn').addEventListener('click', salvarMinhaObjecao);
+  renderMinhasObjGrid();
+}
+
+function salvarMinhaObjecao(){
+  const objecaoTexto = document.getElementById('moObjecao').value.trim();
+  const respostaTexto = document.getElementById('moResposta').value.trim();
+  if(objecaoTexto.length < 3 || respostaTexto.length < 3){
+    alert('Preencha a objeção e a resposta (mínimo de 3 caracteres cada) antes de salvar.');
+    return;
+  }
+  APP_STATE.minhasObjecoes.push({
+    id: 'custom-' + Date.now(),
+    objecao: objecaoTexto,
+    resposta: respostaTexto,
+    criadaEm: new Date().toISOString(),
+  });
+  saveState();
+  addXP(3, 'documentou uma objeção nova');
+  minhasObjecoesForm = { objecao:'', resposta:'' };
+  renderMinhasObjecoes(document.getElementById('objecoesModSubcontent'));
+}
+
+function removerMinhaObjecao(id){
+  if(!confirm('Remover essa objeção da sua lista?')) return;
+  APP_STATE.minhasObjecoes = APP_STATE.minhasObjecoes.filter(o => o.id !== id);
+  saveState();
+  refreshXPWidgets();
+  renderMinhasObjGrid();
+}
+
+function renderMinhasObjGrid(){
+  const grid = document.getElementById('minhasObjGrid');
+  if(APP_STATE.minhasObjecoes.length === 0){
+    grid.innerHTML = `<div class="empty-state">Você ainda não documentou nenhuma objeção. Registre acima as que você ouve na prática.</div>`;
+    return;
+  }
+  grid.innerHTML = [...APP_STATE.minhasObjecoes].reverse().map(o => `
+    <div class="product-card" data-id="${o.id}">
+      <div class="pc-top">
+        <h3>"${o.objecao}"</h3>
+        <span class="tag tag-categoria">Minha anotação</span>
+      </div>
+      <div class="pc-details">
+        <div class="pc-row">
+          <div class="pc-row-label">Resposta usada</div>
+          <div class="pc-row-value">${o.resposta}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" data-remove-id="${o.id}">🗑️ Remover</button>
+      </div>
+      <div class="pc-toggle-hint">Clique para ver detalhes</div>
+    </div>
+  `).join('');
+
+  grid.querySelectorAll('.product-card').forEach(card => {
+    card.addEventListener('click', () => card.classList.toggle('expanded'));
+  });
+  grid.querySelectorAll('[data-remove-id]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removerMinhaObjecao(btn.dataset.removeId);
     });
   });
 }
