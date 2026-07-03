@@ -331,6 +331,35 @@ table.comparador-table{width:100%;border-collapse:collapse;min-width:520px;}
 .feedback-tips{font-size:13px;color:var(--color-text-muted);margin:0;padding-left:18px;}
 .feedback-tips li{margin-bottom:6px;line-height:1.5;}
 
+/* ---------- scripts de ligação ---------- */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px;}
+.form-field label{display:block;font-size:11px;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;font-weight:700;}
+.form-field select, .form-field input[type="text"]{
+  width:100%;background:var(--color-surface);border:1px solid var(--color-border);color:var(--color-text);
+  padding:10px 12px;border-radius:var(--radius-md);font-size:13.5px;font-family:inherit;
+}
+.form-field select:focus, .form-field input[type="text"]:focus{outline:none;border-color:var(--color-gold-dark);}
+
+.mensagem-output{
+  background:var(--color-surface);border:1px solid var(--color-gold-dark);border-radius:var(--radius-lg);
+  padding:18px 20px;margin-bottom:16px;font-size:14.5px;line-height:1.6;white-space:pre-wrap;
+}
+
+.spin-etapas{display:flex;flex-direction:column;gap:12px;}
+.spin-etapa{
+  background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);
+  padding:16px 18px;display:flex;gap:14px;
+}
+.spin-etapa-num{
+  width:34px;height:34px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,var(--color-gold-light),var(--color-gold-dark));
+  display:flex;align-items:center;justify-content:center;font-weight:800;color:#161608;font-size:15px;
+}
+.spin-etapa-body h3{font-size:14.5px;margin-bottom:8px;}
+.spin-etapa-body ul{margin:0;padding-left:18px;}
+.spin-etapa-body li{margin-bottom:5px;line-height:1.5;font-size:13px;color:var(--color-text-muted);}
+.pc-details .btn{margin-top:4px;}
+
 /* ---------- toasts ---------- */
 .toast-container{position:fixed;bottom:20px;right:20px;z-index:100;display:flex;flex-direction:column;gap:10px;}
 .toast{
@@ -412,8 +441,8 @@ const MODULES = [
   { id:'dashboard', label:'Início', icon:'🏠', status:'active', group:null },
   { id:'produtos', label:'Estudo de Produtos', icon:'📚', status:'active', group:'Módulos',
     desc:'Banco de produtos EQI, flashcards, quiz e comparador.' },
-  { id:'scripts', label:'Scripts de Ligação', icon:'📞', status:'soon', group:'Módulos',
-    desc:'Roteiros de abertura, apresentação e fechamento de ligações.' },
+  { id:'scripts', label:'Scripts de Ligação', icon:'📞', status:'active', group:'Módulos',
+    desc:'Gere mensagens de primeiro contato, siga o roteiro SPIN e use templates prontos por canal.' },
   { id:'objecoes', label:'Quebra de Objeções', icon:'🛡️', status:'soon', group:'Módulos',
     desc:'Banco de respostas para as objeções mais comuns dos clientes.' },
   { id:'simulador', label:'Simulador de Propostas', icon:'🧮', status:'active', group:'Módulos',
@@ -443,6 +472,8 @@ function defaultState(){
     objecoesConsultadas: [],
     simulacoesCompletas: 0,
     simulacaoMelhorMedia: 0,
+    mensagensGeradas: 0,
+    templatesUsados: [],
   };
 }
 
@@ -605,6 +636,7 @@ const VIEW_RENDERERS = {
   dashboard: renderDashboard,
   produtos: renderProdutosModule,
   simulador: renderSimuladorModule,
+  scripts: renderScriptsModule,
 };
 
 function renderSidebarNav(){
@@ -677,6 +709,7 @@ function renderStatGridInner(){
   const totalProdutos = PRODUTOS.length;
   const totalFlashcards = FLASHCARDS_TODOS.length;
   const totalObjecoes = OBJECOES.length;
+  const totalTemplates = SCRIPT_TEMPLATES.length;
   return `
     <div class="stat-card">
       <div class="stat-value">${APP_STATE.produtosVistos.length}/${totalProdutos}</div>
@@ -697,6 +730,14 @@ function renderStatGridInner(){
     <div class="stat-card">
       <div class="stat-value">${APP_STATE.simulacoesCompletas}</div>
       <div class="stat-label">Simulações completas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${APP_STATE.mensagensGeradas}</div>
+      <div class="stat-label">Mensagens geradas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${APP_STATE.templatesUsados.length}/${totalTemplates}</div>
+      <div class="stat-label">Templates usados</div>
     </div>
   `;
 }
@@ -1719,6 +1760,376 @@ function renderObjGrid(){
         APP_STATE.objecoesConsultadas.push(id);
         saveState();
         addXP(2, 'consultou uma objeção');
+      }
+    });
+  });
+}
+
+/* ==========================================================================
+   MÓDULO: SCRIPTS DE LIGAÇÃO — DADOS
+   ========================================================================== */
+const SCRIPTS_CANAIS = [
+  { id:'whatsapp', label:'WhatsApp', icon:'💬' },
+  { id:'linkedin', label:'LinkedIn', icon:'💼' },
+  { id:'ligacao', label:'Ligação', icon:'📞' },
+];
+
+const FAIXAS_ETARIAS = [
+  { id:'jovem', label:'Até 30 anos', tom:'casual' },
+  { id:'adulto', label:'31 a 50 anos', tom:'neutro' },
+  { id:'senior', label:'Acima de 50 anos', tom:'formal' },
+];
+
+// Trechos combináveis por canal + tom (definido pela faixa etária). {nome} é
+// substituído pelo nome do lead (ou removido, se não informado).
+const MSG_ABERTURAS = {
+  whatsapp: {
+    casual: ['Oi{nome}, tudo bem?', 'E aí{nome}, tudo certo?', 'Oi{nome}! Passando rapidinho por aqui.'],
+    neutro: ['Olá{nome}, tudo bem?', 'Oi{nome}, boa tarde!', 'Olá{nome}, como vai?'],
+    formal: ['Olá{nome}, boa tarde.', 'Prezado(a){nome}, tudo bem?', 'Olá{nome}, espero que esteja bem.'],
+  },
+  linkedin: {
+    casual: ['Oi{nome}, tudo bem?', 'Olá{nome}! Vi seu perfil por aqui.'],
+    neutro: ['Olá{nome}, tudo bem?', 'Olá{nome}, obrigado por aceitar a conexão.'],
+    formal: ['Prezado(a){nome}, tudo bem?', 'Olá{nome}, é um prazer me conectar com você.'],
+  },
+  ligacao: {
+    casual: ['Oi{nome}, tudo bem? Aqui é da EQI Investimentos.', 'Opa{nome}, tudo certo? Falo da EQI.'],
+    neutro: ['Olá{nome}, tudo bem? Meu nome é [seu nome], da EQI Investimentos.', 'Boa tarde{nome}, aqui é da EQI Investimentos.'],
+    formal: ['Boa tarde{nome}, meu nome é [seu nome], consultor da EQI Investimentos.', 'Prezado(a){nome}, boa tarde. Falo em nome da EQI Investimentos.'],
+  },
+};
+
+const MSG_GANCHOS_PERFIL = {
+  conservador: [
+    'Trabalho ajudando pessoas a colocar o dinheiro pra render com segurança, sem abrir mão da tranquilidade.',
+    'Ajudo investidores que preferem opções seguras, com garantia, a terem uma rentabilidade melhor que a poupança.',
+    'Costumo ajudar quem quer proteger o patrimônio e ainda assim ganhar mais que a poupança.',
+  ],
+  moderado: [
+    'Ajudo investidores a comparar onde o dinheiro rende mais, sem abrir mão de um equilíbrio entre segurança e retorno.',
+    'Trabalho com quem já investe um pouco e quer diversificar de forma mais inteligente.',
+    'Costumo ajudar pessoas a organizar a carteira buscando mais rentabilidade sem virar a mesa pro risco.',
+  ],
+  arrojado: [
+    'Ajudo investidores que buscam rentabilidade acima da média a terem acesso a produtos que o banco não oferece.',
+    'Trabalho com quem quer ir além do CDI e está disposto a estudar oportunidades mais estratégicas.',
+    'Costumo apresentar oportunidades pra quem já entende de investimentos e busca mais retorno.',
+  ],
+};
+
+const MSG_GATILHO_CONECTORES = [
+  'Vi que {gatilho} e lembrei de você.',
+  'Reparei que {gatilho}, por isso te chamei.',
+  'Percebi que {gatilho} — faz sentido a gente conversar sobre isso.',
+];
+
+const MSG_FECHAMENTOS = {
+  whatsapp: {
+    casual: ['Bora bater um papo rápido essa semana? 😊', 'Topa uma call de 10 minutinhos?'],
+    neutro: ['Topa batermos um papo rápido essa semana?', 'Faz sentido eu te passar mais informações?'],
+    formal: ['Teria disponibilidade para uma breve conversa esta semana?', 'Posso lhe encaminhar mais informações a respeito?'],
+  },
+  linkedin: {
+    casual: ['Bora trocar uma ideia rapidinho?', 'Topa um bate-papo de 15 minutos?'],
+    neutro: ['Podemos marcar uma conversa rápida essa semana?', 'Faz sentido agendarmos 15 minutos essa semana?'],
+    formal: ['Seria possível agendarmos uma breve conversa esta semana?', 'Fico à disposição para agendarmos uma conversa quando for conveniente.'],
+  },
+  ligacao: {
+    casual: ['Consegue falar 5 minutinhos agora ou prefere que eu ligue depois?', 'Tem 5 minutos pra gente conversar rapidinho?'],
+    neutro: ['Você teria uns minutos agora, ou prefere que eu retorne em outro horário?', 'Posso te tomar 5 minutos agora?'],
+    formal: ['O(a) senhor(a) teria disponibilidade de alguns minutos agora, ou prefere que eu retorne em outro momento?', 'Haveria um melhor momento para conversarmos com mais calma?'],
+  },
+};
+
+function escolherAleatorio(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
+
+function inserirNome(template, nome){
+  return template.replace('{nome}', nome && nome.trim() ? ` ${nome.trim()}` : '');
+}
+
+function gerarMensagem({ canal, perfil, nome, gatilho, faixaEtaria }){
+  const faixa = FAIXAS_ETARIAS.find(f => f.id === faixaEtaria) || FAIXAS_ETARIAS[1];
+  const tom = faixa.tom;
+  const abertura = inserirNome(escolherAleatorio(MSG_ABERTURAS[canal][tom]), nome);
+  const gancho = escolherAleatorio(MSG_GANCHOS_PERFIL[perfil]);
+  const fechamento = escolherAleatorio(MSG_FECHAMENTOS[canal][tom]);
+
+  let partes = [abertura, gancho];
+  if(gatilho && gatilho.trim()){
+    partes.push(escolherAleatorio(MSG_GATILHO_CONECTORES).replace('{gatilho}', gatilho.trim()));
+  }
+  partes.push(fechamento);
+  return partes.join(' ');
+}
+
+/* ---------- roteiro SPIN ---------- */
+const ROTEIRO_SPIN = [
+  { etapa:'Abertura', icone:'👋', frases:[
+      'Boa tarde, tudo bem? Meu nome é [seu nome], consultor de investimentos da EQI. Você tem 5 minutinhos?',
+      'Oi, aqui é da EQI Investimentos. Vi que você tem interesse em investimentos — posso te tomar alguns minutos?',
+    ]},
+  { etapa:'Situação', icone:'🔍', frases:[
+      'Me conta rapidinho: hoje como você organiza seus investimentos?',
+      'Você já investe em algo hoje, ou está começando agora?',
+      'Como você costuma decidir onde colocar seu dinheiro atualmente?',
+    ]},
+  { etapa:'Problema', icone:'⚠️', frases:[
+      'E o que mais te incomoda ou preocupa em relação a isso hoje?',
+      'Alguma coisa te deixou insatisfeito com o que você tem hoje?',
+      'O que você sente que está faltando na sua estratégia atual?',
+    ]},
+  { etapa:'Implicação', icone:'📉', frases:[
+      'Se isso continuar assim, como você acha que impacta seus objetivos no longo prazo?',
+      'Isso te preocupa pensando em algo como aposentadoria ou um objetivo maior?',
+      'Já parou pra pensar quanto isso pode estar custando pra você ao longo dos anos?',
+    ]},
+  { etapa:'Necessidade', icone:'🎯', frases:[
+      'Se eu te mostrasse uma forma de resolver isso sem abrir mão da segurança, faria sentido pra você?',
+      'Seria útil se eu te apresentasse opções que já resolvem esse ponto?',
+      'O que precisaria acontecer pra você se sentir mais tranquilo com seus investimentos?',
+    ]},
+  { etapa:'Fechamento', icone:'✅', frases:[
+      'Faz sentido eu te enviar uma proposta com base no que conversamos?',
+      'Podemos marcar 15 minutos essa semana pra eu te mostrar em detalhes?',
+      'Posso já te ajudar a dar o primeiro passo agora mesmo?',
+    ]},
+];
+
+/* ---------- templates por canal ---------- */
+const SCRIPT_TEMPLATES = [
+  { id:'tpl-wpp-1', canal:'whatsapp', titulo:'Primeira mensagem — abordagem direta',
+    texto:'Oi {nome}, tudo bem? Meu nome é [seu nome], consultor de investimentos aqui da EQI. Vi que você pode ter interesse em fazer o dinheiro render mais — posso te mandar uma ideia rápida de como funciona? Sem compromisso nenhum.' },
+  { id:'tpl-wpp-2', canal:'whatsapp', titulo:'Follow-up depois de indicação',
+    texto:'Oi {nome}, tudo bem? Aqui é [seu nome], da EQI Investimentos. O(a) [nome de quem indicou] comentou que vocês tinham conversado sobre investimentos e me passou seu contato. Posso te enviar algumas ideias rápidas com base no que você busca?' },
+  { id:'tpl-wpp-3', canal:'whatsapp', titulo:'Retomando contato depois de um tempo',
+    texto:'Oi {nome}, tudo bem? Faz um tempo que a gente não troca uma ideia sobre seus investimentos. Surgiram algumas oportunidades interessantes ultimamente — topa eu te atualizar rapidinho?' },
+  { id:'tpl-li-1', canal:'linkedin', titulo:'Convite de conexão personalizado',
+    texto:'Olá {nome}, tudo bem? Trabalho com assessoria de investimentos na EQI e gostaria muito de me conectar. Acompanho seu perfil e acredito que podemos trocar boas ideias sobre o mercado.' },
+  { id:'tpl-li-2', canal:'linkedin', titulo:'Mensagem após aceitar conexão',
+    texto:'Oi {nome}, obrigado por aceitar a conexão! Trabalho ajudando pessoas a organizarem melhor os investimentos, buscando mais rentabilidade sem abrir mão da segurança. Faz sentido batermos um papo rápido essa semana?' },
+  { id:'tpl-li-3', canal:'linkedin', titulo:'Follow-up de conteúdo/artigo',
+    texto:'Oi {nome}, vi que você interagiu com um conteúdo sobre investimentos recentemente. Trabalho na EQI ajudando investidores a entenderem melhor as opções do mercado — posso te mandar uma ideia rápida sobre o assunto?' },
+  { id:'tpl-lig-1', canal:'ligacao', titulo:'Abertura de ligação fria',
+    texto:'Boa tarde {nome}, tudo bem? Meu nome é [seu nome], sou consultor de investimentos da EQI. Estou ligando porque ajudamos investidores a organizar melhor o dinheiro buscando mais rentabilidade — você teria 5 minutinhos agora, ou prefere que eu retorne em outro horário?' },
+  { id:'tpl-lig-2', canal:'ligacao', titulo:'Abertura de ligação com indicação',
+    texto:'Boa tarde {nome}, tudo bem? Aqui é [seu nome], da EQI Investimentos. O(a) [nome de quem indicou] me passou seu contato e comentou que vocês já haviam conversado sobre investimentos. Você teria alguns minutos agora pra gente trocar uma ideia?' },
+  { id:'tpl-lig-3', canal:'ligacao', titulo:'Retomada de ligação (lead que sumiu)',
+    texto:'Boa tarde {nome}, tudo bem? Faz um tempo que conversamos sobre seus investimentos aqui na EQI. Surgiram algumas novidades que acho que fazem sentido pro seu perfil — você teria uns minutinhos agora?' },
+];
+
+/* ---------- copiar para a área de transferência ---------- */
+function copiarTexto(texto){
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = texto;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand('copy'); }catch(e){ /* nada mais a fazer */ }
+    ta.remove();
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(texto).catch(fallback);
+  } else {
+    fallback();
+  }
+  showToast('Copiado para a área de transferência!');
+}
+
+/* ==========================================================================
+   MÓDULO: SCRIPTS DE LIGAÇÃO — RENDER
+   ========================================================================== */
+let scriptsSubView = 'gerador';
+let geradorForm = { canal:'whatsapp', perfil:'conservador', faixaEtaria:'adulto', nome:'', gatilho:'' };
+let mensagemGerada = '';
+let templatesFiltro = { canal:'Todos' };
+const TEMPLATES_CANAIS_FILTRO = ['Todos', ...SCRIPTS_CANAIS.map(c => c.label)];
+
+function renderScriptsModule(container){
+  container.innerHTML = `
+    <div class="module-header">
+      <h1>📞 Scripts de Ligação</h1>
+      <p>Gere mensagens de primeiro contato, siga o roteiro SPIN durante a ligação e adapte templates prontos por canal.</p>
+    </div>
+    <div class="disclaimer">Mensagens geradas por combinação de modelos locais (sem IA) — revise sempre antes de enviar, ajustando ao seu estilo.</div>
+    <div class="subtabs" id="scriptsSubtabs">
+      <button class="subtab-btn" data-sub="gerador">Gerador de Mensagem</button>
+      <button class="subtab-btn" data-sub="roteiro">Roteiro SPIN</button>
+      <button class="subtab-btn" data-sub="templates">Templates por Canal</button>
+    </div>
+    <div id="scriptsSubcontent"></div>
+  `;
+  document.querySelectorAll('#scriptsSubtabs [data-sub]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      scriptsSubView = btn.dataset.sub;
+      renderScriptsSubView();
+    });
+  });
+  renderScriptsSubView();
+}
+
+function renderScriptsSubView(){
+  document.querySelectorAll('#scriptsSubtabs [data-sub]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.sub === scriptsSubView);
+  });
+  const el = document.getElementById('scriptsSubcontent');
+  if(scriptsSubView === 'gerador') renderGerador(el);
+  else if(scriptsSubView === 'roteiro') renderRoteiroSpin(el);
+  else if(scriptsSubView === 'templates') renderTemplatesCanal(el);
+}
+
+/* ---------- GERADOR DE MENSAGEM ---------- */
+function atualizarGeradorForm(){
+  geradorForm.canal = document.getElementById('fCanal').value;
+  geradorForm.perfil = document.getElementById('fPerfil').value;
+  geradorForm.faixaEtaria = document.getElementById('fFaixa').value;
+  geradorForm.nome = document.getElementById('fNome').value;
+  geradorForm.gatilho = document.getElementById('fGatilho').value;
+}
+
+function renderGerador(container){
+  container.innerHTML = `
+    <div class="form-grid">
+      <div class="form-field">
+        <label for="fCanal">Canal</label>
+        <select id="fCanal">${SCRIPTS_CANAIS.map(c => `<option value="${c.id}" ${geradorForm.canal === c.id ? 'selected' : ''}>${c.icon} ${c.label}</option>`).join('')}</select>
+      </div>
+      <div class="form-field">
+        <label for="fPerfil">Perfil do lead</label>
+        <select id="fPerfil">${PROSPECT_PERFIS.map(p => `<option value="${p.id}" ${geradorForm.perfil === p.id ? 'selected' : ''}>${p.icon} ${p.label}</option>`).join('')}</select>
+      </div>
+      <div class="form-field">
+        <label for="fFaixa">Faixa etária</label>
+        <select id="fFaixa">${FAIXAS_ETARIAS.map(f => `<option value="${f.id}" ${geradorForm.faixaEtaria === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}</select>
+      </div>
+      <div class="form-field">
+        <label for="fNome">Nome do lead (opcional)</label>
+        <input type="text" id="fNome" placeholder="ex: Ana" value="${geradorForm.nome}" />
+      </div>
+      <div class="form-field" style="grid-column:1/-1;">
+        <label for="fGatilho">Gatilho de interesse (opcional)</label>
+        <input type="text" id="fGatilho" placeholder="ex: baixou nosso material sobre Tesouro Direto" value="${geradorForm.gatilho}" />
+      </div>
+    </div>
+    <div class="flashcard-controls" style="justify-content:flex-start;margin-bottom:16px;">
+      <button class="btn btn-primary" id="gerarMsgBtn">✨ Gerar mensagem</button>
+    </div>
+    <div id="mensagemWrap"></div>
+  `;
+
+  document.getElementById('fCanal').addEventListener('change', atualizarGeradorForm);
+  document.getElementById('fPerfil').addEventListener('change', atualizarGeradorForm);
+  document.getElementById('fFaixa').addEventListener('change', atualizarGeradorForm);
+  document.getElementById('fNome').addEventListener('input', atualizarGeradorForm);
+  document.getElementById('fGatilho').addEventListener('input', atualizarGeradorForm);
+
+  document.getElementById('gerarMsgBtn').addEventListener('click', gerarNovaMensagem);
+
+  if(mensagemGerada) renderMensagemGerada();
+}
+
+function gerarNovaMensagem(){
+  mensagemGerada = gerarMensagem(geradorForm);
+  APP_STATE.mensagensGeradas++;
+  saveState();
+  addXP(5, 'gerou uma mensagem de primeiro contato');
+  renderMensagemGerada();
+}
+
+function renderMensagemGerada(){
+  const wrap = document.getElementById('mensagemWrap');
+  if(!wrap) return;
+  wrap.innerHTML = `
+    <div class="mensagem-output">${mensagemGerada}</div>
+    <div class="flashcard-controls" style="justify-content:flex-start;">
+      <button class="btn btn-secondary" id="copiarMsgBtn">📋 Copiar mensagem</button>
+      <button class="btn btn-ghost" id="regerarMsgBtn">🔀 Gerar outra variação</button>
+    </div>
+  `;
+  document.getElementById('copiarMsgBtn').addEventListener('click', () => copiarTexto(mensagemGerada));
+  document.getElementById('regerarMsgBtn').addEventListener('click', gerarNovaMensagem);
+}
+
+/* ---------- ROTEIRO SPIN ---------- */
+function renderRoteiroSpin(container){
+  container.innerHTML = `
+    <div class="spin-etapas">
+      ${ROTEIRO_SPIN.map((etapa, i) => `
+        <div class="spin-etapa">
+          <div class="spin-etapa-num">${etapa.icone}</div>
+          <div class="spin-etapa-body">
+            <h3>${i + 1}. ${etapa.etapa}</h3>
+            <ul>${etapa.frases.map(f => `<li>"${f}"</li>`).join('')}</ul>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ---------- TEMPLATES POR CANAL ---------- */
+function renderTemplatesCanal(container){
+  container.innerHTML = `
+    <div class="toolbar" id="tplFiltros"></div>
+    <div class="card-grid" id="tplGrid"></div>
+  `;
+  document.getElementById('tplFiltros').innerHTML = TEMPLATES_CANAIS_FILTRO.map(label => `
+    <button class="filter-chip ${templatesFiltro.canal === label ? 'active' : ''}" data-canal="${label}">${label}</button>
+  `).join('');
+  document.getElementById('tplFiltros').querySelectorAll('[data-canal]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      templatesFiltro.canal = btn.dataset.canal;
+      renderTemplatesCanal(container);
+    });
+  });
+  renderTplGrid();
+}
+
+function renderTplGrid(){
+  const grid = document.getElementById('tplGrid');
+  const filtrados = SCRIPT_TEMPLATES.filter(t => {
+    if(templatesFiltro.canal === 'Todos') return true;
+    const canalInfo = SCRIPTS_CANAIS.find(c => c.id === t.canal);
+    return canalInfo && canalInfo.label === templatesFiltro.canal;
+  });
+
+  grid.innerHTML = filtrados.map(t => {
+    const canalInfo = SCRIPTS_CANAIS.find(c => c.id === t.canal);
+    return `
+      <div class="product-card" data-id="${t.id}">
+        <div class="pc-top">
+          <h3>${t.titulo}</h3>
+          <span class="tag tag-categoria">${canalInfo.icon} ${canalInfo.label}</span>
+        </div>
+        <div class="pc-details">
+          <div class="pc-row">
+            <div class="pc-row-label">Modelo</div>
+            <div class="pc-row-value">${t.texto}</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" data-copy-id="${t.id}">📋 Copiar modelo</button>
+        </div>
+        <div class="pc-toggle-hint">Clique para ver o modelo completo</div>
+      </div>
+    `;
+  }).join('');
+
+  grid.querySelectorAll('.product-card').forEach(card => {
+    card.addEventListener('click', () => {
+      card.classList.toggle('expanded');
+    });
+  });
+  grid.querySelectorAll('[data-copy-id]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.copyId;
+      const tpl = SCRIPT_TEMPLATES.find(t => t.id === id);
+      copiarTexto(tpl.texto);
+      if(!APP_STATE.templatesUsados.includes(id)){
+        APP_STATE.templatesUsados.push(id);
+        saveState();
+        addXP(3, 'usou um template pronto');
       }
     });
   });
