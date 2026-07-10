@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Console do Agente — Hub SDR EQI</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <nav class="topnav" id="topnav"></nav>
+
+  <main class="page" id="agent-page">
+    <p class="response-empty">Carregando agente…</p>
+  </main>
+
+  <script src="js/agents-data.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    function getAgentIdFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return Number(params.get("id"));
+    }
+
+    function renderAgentNotFound() {
+      document.getElementById("agent-page").innerHTML = `
+        <a class="back-link" href="index.html">&larr; Voltar ao dashboard</a>
+        <div class="page-header">
+          <h1>Agente não encontrado</h1>
+          <p>Não existe agente com esse id. Volte ao dashboard e escolha uma estação do pipeline.</p>
+        </div>
+      `;
+    }
+
+    function renderHistoryList(agent) {
+      const items = getHistory(agent.id);
+      if (items.length === 0) {
+        return `<p class="history-empty">Nenhuma execução registrada ainda para este agente.</p>`;
+      }
+      return items.map((item, idx) => `
+        <details class="history-item">
+          <summary>
+            <div class="history-item__meta">
+              <span>${new Date(item.timestamp).toLocaleString("pt-BR")}</span>
+              <span class="mono">#${items.length - idx}</span>
+            </div>
+          </summary>
+          <div class="history-item__body">
+            <p class="text-muted" style="margin-bottom:8px;"><strong>Entrada:</strong></p>
+            <pre class="mono" style="white-space:pre-wrap; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:10px; font-size:0.8rem;">${item.input.replace(/</g, "&lt;")}</pre>
+            <p class="text-muted" style="margin:10px 0 8px;"><strong>Saída:</strong></p>
+            <div>${renderMarkdown(item.output)}</div>
+          </div>
+        </details>
+      `).join("");
+    }
+
+    function renderAgentPage(agent) {
+      const typeLabel = TYPE_LABELS[agent.type];
+
+      document.getElementById("agent-page").innerHTML = `
+        <a class="back-link" href="index.html">&larr; Voltar ao dashboard</a>
+
+        <div class="console-header">
+          <div>
+            <div class="console-header__id">AGENTE ${String(agent.id).padStart(2, "0")} · FASE ${agent.phase}</div>
+            <h1>${agent.name}</h1>
+          </div>
+          <span class="badge badge--${agent.type}"><span class="badge__dot"></span>${typeLabel}</span>
+        </div>
+
+        <p class="console-objective">${agent.objective}</p>
+
+        <div class="console-grid">
+          <div class="panel">
+            <h3>Tarefas</h3>
+            <ul>${agent.tasks.map((t) => `<li>${t}</li>`).join("")}</ul>
+          </div>
+          <div class="panel">
+            <h3>Interações com outros agentes</h3>
+            <p>${agent.interactions}</p>
+          </div>
+          <div class="panel">
+            <h3>Entradas esperadas</h3>
+            <p>${agent.inputs}</p>
+          </div>
+          <div class="panel">
+            <h3>Saída esperada</h3>
+            <p>${agent.outputs}</p>
+          </div>
+          <div class="panel" style="grid-column: 1 / -1;">
+            <h3>Ferramentas recomendadas</h3>
+            <div class="tool-tags">${agent.tools.map((t) => `<span class="tool-tag">${t}</span>`).join("")}</div>
+          </div>
+        </div>
+
+        <details class="details">
+          <summary>System prompt completo</summary>
+          <pre>${agent.systemPrompt.replace(/</g, "&lt;")}</pre>
+        </details>
+
+        <div class="run-panel">
+          <label for="agent-input">Cole aqui os dados de entrada (lead, mensagem, dados de qualificação…)</label>
+          <textarea id="agent-input" placeholder="${agent.inputs}"></textarea>
+          <div class="run-panel__actions">
+            <button type="button" class="btn-primary" id="run-btn">Rodar agente</button>
+            <span class="run-status" id="run-status"></span>
+          </div>
+          <div id="run-alert"></div>
+        </div>
+
+        <div class="response-panel">
+          <div class="response-panel__header">
+            <h3>Resposta</h3>
+            <button type="button" class="btn-secondary" id="copy-btn" style="display:none;">Copiar resposta</button>
+          </div>
+          <div id="response-body">
+            <p class="response-empty">Ainda não há resposta. Cole uma entrada e clique em "Rodar agente".</p>
+          </div>
+        </div>
+
+        <div class="history-panel">
+          <div class="history-panel__header">
+            <h3>Histórico local (últimas 20 execuções)</h3>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn-secondary" id="export-history-btn">Exportar JSON</button>
+              <button type="button" class="btn-danger" id="clear-history-btn">Limpar histórico</button>
+            </div>
+          </div>
+          <div id="history-list">${renderHistoryList(agent)}</div>
+        </div>
+      `;
+
+      wireAgentConsole(agent);
+    }
+
+    function wireAgentConsole(agent) {
+      const runBtn = document.getElementById("run-btn");
+      const statusEl = document.getElementById("run-status");
+      const alertEl = document.getElementById("run-alert");
+      const responseBody = document.getElementById("response-body");
+      const copyBtn = document.getElementById("copy-btn");
+      const inputEl = document.getElementById("agent-input");
+      let lastOutput = "";
+
+      runBtn.addEventListener("click", async () => {
+        const userInput = inputEl.value.trim();
+        alertEl.innerHTML = "";
+
+        if (!userInput) {
+          alertEl.innerHTML = `<div class="alert alert--info">Cole algum dado de entrada antes de rodar o agente.</div>`;
+          return;
+        }
+
+        runBtn.disabled = true;
+        statusEl.textContent = "Rodando…";
+        copyBtn.style.display = "none";
+
+        try {
+          const output = await callAgent(agent.systemPrompt, userInput, {
+            onStatus: (msg) => { statusEl.textContent = msg; }
+          });
+
+          lastOutput = output;
+          responseBody.innerHTML = `<div class="response-body">${renderMarkdown(output)}</div>`;
+          copyBtn.style.display = "inline-flex";
+
+          pushHistory(agent.id, {
+            timestamp: Date.now(),
+            input: userInput,
+            output
+          });
+          document.getElementById("history-list").innerHTML = renderHistoryList(agent);
+
+          statusEl.textContent = "Concluído.";
+        } catch (err) {
+          alertEl.innerHTML = `<div class="alert alert--error">${err.message}</div>`;
+          statusEl.textContent = "";
+        } finally {
+          runBtn.disabled = false;
+        }
+      });
+
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(lastOutput);
+          copyBtn.textContent = "Copiado!";
+          setTimeout(() => { copyBtn.textContent = "Copiar resposta"; }, 1500);
+        } catch (_) {
+          alertEl.innerHTML = `<div class="alert alert--error">Não foi possível copiar automaticamente. Selecione o texto manualmente.</div>`;
+        }
+      });
+
+      document.getElementById("export-history-btn").addEventListener("click", () => {
+        const items = getHistory(agent.id);
+        const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `historico-agente-${agent.id}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById("clear-history-btn").addEventListener("click", () => {
+        clearHistory(agent.id);
+        document.getElementById("history-list").innerHTML = renderHistoryList(agent);
+      });
+    }
+
+    injectTopNav("agente");
+    const agentId = getAgentIdFromUrl();
+    const agent = AGENTS.find((a) => a.id === agentId);
+    if (agent) {
+      renderAgentPage(agent);
+    } else {
+      renderAgentNotFound();
+    }
+  </script>
+</body>
+</html>
